@@ -446,3 +446,21 @@ def retry_n(n: int, fn: Callable, *args, log_tries=False, **kwargs) -> Any:
                 raise
 
     return output
+
+
+def update_and_flatten_dict(original_dict, update_dict):
+    """
+    this method updates the original with contents from the
+    update dict, it also flattens the dict
+
+    Returns:
+        total_val: sum of all the values in the newly updated_dict
+    """
+    total_val = 0
+    for key, val in update_dict.items():
+        if torch.is_tensor(val):
+            if val.dim() == 1:
+                val = val.mean()
+        original_dict.update({key: val})
+        total_val += val
+    return total_val

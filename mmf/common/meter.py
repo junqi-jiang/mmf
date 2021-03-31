@@ -3,6 +3,9 @@
 from collections import defaultdict, deque
 
 import torch
+from mmf.common.registry import registry
+from mmf.utils.distributed import reduce_dict
+from mmf.utils.general import update_and_flatten_dict
 
 
 class SmoothedValue:
@@ -54,6 +57,44 @@ class Meter:
     def __init__(self, delimiter=", "):
         self.meters = defaultdict(SmoothedValue)
         self.delimiter = delimiter
+
+    def update_from_report(self, report, should_update_loss=True):
+        """
+        this method updates the provided meter with report info.
+        this method by default handles reducing metrics.
+
+        Args:
+            report (Report): report object which content is used to populate
+            the current meter
+
+        Usage::
+
+        >>> meter = Meter()
+        >>> report = Report(prepared_batch, model_output)
+        >>> meter.update_from_report(report)
+        """
+        if hasattr(report, "metrics"):
+            metrics_dict = report.metrics
+            reduced_metrics_dict = reduce_dict(metrics_dict)
+
+        if should_update_loss:
+            loss_dict = report.losses
+            reduced_loss_dict = reduce_dict(loss_dict)
+
+        with torch.no_grad():
+            meter_update_dict = {}
+            if should_update_loss:
+                total_loss_key = report.dataset_type + "/total_loss"
+                total_loss = update_and_flatten_dict(
+                    meter_update_dict, reduced_loss_dict
+                )
+                registry.register(total_loss_key, total_loss)
+                meter_update_dict.update({total_loss_key: total_loss})
+
+            if hasattr(report, "metrics"):
+                update_and_flatten_dict(meter_update_dict, reduced_metrics_dict)
+
+            self.update(meter_update_dict, report.batch_size)
 
     def update(self, update_dict, batch_size):
         for k, v in update_dict.items():
