@@ -1,14 +1,18 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 import collections
+import copy
 import warnings
 from collections import OrderedDict
 
 import torch
+from mmf.common.sample import detach_tensor
 
 
 class Report(OrderedDict):
-    def __init__(self, batch, model_output=None, *args):
+    def __init__(self, batch=None, model_output=None, *args):
         super().__init__(self)
+        if batch is None:
+            return
         if model_output is None:
             model_output = {}
         if self._check_and_load_tuple(batch):
@@ -74,6 +78,39 @@ class Report(OrderedDict):
     def fields(self):
         return list(self.keys())
 
+    def apply_fn(self, fn, fields=None):
+        for key in self.keys():
+            if fields is not None and isinstance(fields, (list, tuple)):
+                if key not in fields:
+                    continue
+            self[key] = fn(self[key])
+            if isinstance(self[key], collections.MutableSequence):
+                for idx, item in enumerate(self[key]):
+                    self[key][idx] = fn(item)
+            elif isinstance(self[key], dict):
+                for subkey in self[key].keys():
+                    self[key][subkey] = fn(self[key][subkey])
+        return self
+
+    def detach(self):
+        return self.apply_fn(detach_tensor)
+
+    def to(self, device, non_blocking=True, fields=None):
+        if not isinstance(device, torch.device):
+            if not isinstance(device, str):
+                raise TypeError(
+                    "device must be either 'str' or "
+                    "'torch.device' type, {} found".format(type(device))
+                )
+            device = torch.device(device)
+
+        def fn(x):
+            if hasattr(x, "to"):
+                x = x.to(device, non_blocking=non_blocking)
+            return x
+
+        return self.apply_fn(fn, fields)
+
     def accumulate_tensor_fields_and_loss(self, report, field_list):
         for key in field_list:
             if key == "__prediction_report__":
@@ -99,3 +136,19 @@ class Report(OrderedDict):
                 continue
             if isinstance(self.losses[key], torch.Tensor):
                 self.losses[key] += value
+
+    def copy(self):
+        """Get a copy of the current Report
+
+        Returns:
+            SampleList: Copy of current Report.
+
+        """
+        report = Report()
+
+        fields = self.fields()
+
+        for field in fields:
+            report[field] = copy.deepcopy(self[field])
+
+        return report
