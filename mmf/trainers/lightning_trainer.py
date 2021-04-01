@@ -71,6 +71,9 @@ class LightningTrainer(BaseTrainer):
         logger.info("Loading datasets")
         data_module = MultiDataModule(self.config)
         self.data_module = data_module
+        self.data_module.train_loader = data_module.train_dataloader()
+        self.data_module.val_loader = data_module.val_dataloader()
+        self.data_module.test_loader = data_module.test_dataloader()
 
     def load_model(self) -> None:
         logger.info("Loading models")
@@ -83,6 +86,7 @@ class LightningTrainer(BaseTrainer):
 
         self.model = build_model(attributes)
         self.model.is_pl_enabled = True
+        self.model.build_meters(self.run_type)
 
     def load_optimizer(self) -> None:
         logger.info("Loading optimizer: noop for lightning")
@@ -90,8 +94,8 @@ class LightningTrainer(BaseTrainer):
     def load_metrics(self) -> None:
         logger.info("Loading metrics")
         metrics = self.config.evaluation.get("metrics", [])
-        self.metrics = Metrics(metrics)
-        self.metrics_params = self.metrics.required_params
+        # moved metrics into the model object
+        self.model.metrics = Metrics(metrics)
 
     def configure_callbacks(self) -> None:
         self._callbacks = [LightningLoopCallback(self)]

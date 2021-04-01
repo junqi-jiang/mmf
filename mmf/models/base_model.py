@@ -48,7 +48,9 @@ from dataclasses import dataclass
 from typing import List, Optional, Union
 
 import pytorch_lightning as pl
+from mmf.common.meter import Meter
 from mmf.common.registry import registry
+from mmf.common.report import Report
 from mmf.common.sample import SampleList, to_device
 from mmf.modules.losses import LossConfig, Losses
 from mmf.utils.checkpoint import load_pretrained_model
@@ -87,7 +89,6 @@ class BaseModel(pl.LightningModule):
 
         self._logged_warning = {"losses_present": False}
         self._is_pretrained = False
-        self._is_pl_enabled = False
 
     @classmethod
     def from_params(cls, **kwargs):
@@ -97,13 +98,13 @@ class BaseModel(pl.LightningModule):
     def is_pretrained(self):
         return self._is_pretrained
 
-    @property
-    def is_pl_enabled(self):
-        return self._is_pl_enabled
-
     @is_pretrained.setter
     def is_pretrained(self, x: bool):
         self._is_pretrained = x
+
+    @property
+    def is_pl_enabled(self):
+        return self._is_pl_enabled
 
     @is_pl_enabled.setter
     def is_pl_enabled(self, x: bool):
@@ -117,6 +118,15 @@ class BaseModel(pl.LightningModule):
         raise NotImplementedError(
             "Build method not implemented in the child model class."
         )
+
+    def build_meters(self, run_type):
+        """Function only used in lightning setting"""
+        if "train" in run_type:
+            self.train_meter = Meter()
+        if "val" in run_type:
+            self.val_meter = Meter()
+        if "test" in run_type:
+            self.test_meter = Meter()
 
     def init_losses(self):
         """Initializes loss for the model based ``losses`` key. Automatically called by
@@ -187,7 +197,10 @@ class BaseModel(pl.LightningModule):
         Returns:
             Dict: Dict containing loss.
         """
-        return self._forward_lightning_step(batch, batch_idx)
+        output = self._forward_lightning_step(batch, batch_idx)
+        report = Report(batch, output)
+        Meter.update_meter_from_report(report, self.train_meter)
+        return output
 
     def validation_step(self, batch: SampleList, batch_idx: int, *args, **kwargs):
         """Member function of PL modules. Used only when PL enabled.
@@ -201,7 +214,11 @@ class BaseModel(pl.LightningModule):
         Returns:
             Dict
         """
-        return self._forward_lightning_step(batch, batch_idx)
+        output = self._forward_lightning_step(batch, batch_idx)
+        report = Report(batch, output)
+        Meter.update_meter_from_report(report, self.val_meter)
+        report.metrics = self.metrics(report, report)
+        return output
 
     def test_step(self, batch: SampleList, batch_idx: int, *args, **kwargs):
         """Member function of PL modules. Used only when PL enabled.
@@ -222,7 +239,6 @@ class BaseModel(pl.LightningModule):
         output = self(batch)
         loss_dict = output["losses"]
         output["loss"] = sum(loss.mean() for loss in loss_dict.values())
-        output["input_batch"] = batch
         return output
 
     def configure_optimizers(self):
@@ -244,7 +260,7 @@ class BaseModel(pl.LightningModule):
         return batch
 
     def __call__(self, sample_list, *args, **kwargs):
-        if not self._is_pl_enabled:
+        if self._is_pl_enabled:
             # Move to proper device i.e. same as the model before passing
             sample_list = to_device(sample_list, get_current_device())
 
