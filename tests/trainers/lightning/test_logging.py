@@ -30,7 +30,6 @@ class TestLightningTrainerLogging(unittest.TestCase):
             batch_size=2,
             max_epochs=None,
             evaluation_interval=3,
-            mock_functions=False,
             tensorboard=True,
         )
 

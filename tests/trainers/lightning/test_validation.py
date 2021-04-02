@@ -45,11 +45,7 @@ class TestLightningTrainerValidation(unittest.TestCase):
     @patch("mmf.trainers.callbacks.logistics.summarize_report")
     def test_validation_parity(self, summarize_report_fn):
         mmf_trainer = get_mmf_trainer(
-            max_updates=8,
-            batch_size=2,
-            max_epochs=None,
-            evaluation_interval=3,
-            mock_functions=False,
+            max_updates=8, batch_size=2, max_epochs=None, evaluation_interval=3
         )
         mmf_trainer.load_metrics()
         logistics_callback = LogisticsCallback(mmf_trainer.config, mmf_trainer)

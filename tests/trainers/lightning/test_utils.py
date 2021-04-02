@@ -86,6 +86,7 @@ def get_lightning_trainer(
     )
     trainer.model.build()
     trainer.model.train()
+    trainer.model.build_meters(trainer.run_type)
     trainer.model.is_pl_enabled = True
     if prepare_trainer:
         prepare_lightning_trainer(trainer)
@@ -103,7 +104,6 @@ def get_mmf_trainer(
     grad_clipping_config=None,
     evaluation_interval=4,
     batch_size=1,
-    mock_functions=True,
     tensorboard=False,
 ):
     torch.random.manual_seed(2)
@@ -123,13 +123,13 @@ def get_mmf_trainer(
         scheduler_config=scheduler_config,
         grad_clipping_config=grad_clipping_config,
         batch_size=batch_size,
-        mock_functions=mock_functions,
         tensorboard=tensorboard,
     )
     if on_update_end_fn:
         trainer.on_update_end = on_update_end_fn
     model.to(trainer.device)
     trainer.model = model
+    trainer.load_datasets()
     return trainer
 
 

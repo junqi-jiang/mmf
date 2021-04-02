@@ -89,6 +89,7 @@ class BaseModel(pl.LightningModule):
 
         self._logged_warning = {"losses_present": False}
         self._is_pretrained = False
+        self._is_pl_enabled = False
 
     @classmethod
     def from_params(cls, **kwargs):

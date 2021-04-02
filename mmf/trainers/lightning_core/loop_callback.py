@@ -50,7 +50,7 @@ class LightningLoopCallback(Callback):
 
         # aggregate train combined_report
         self.train_combined_report = self._update_and_create_report(
-            batch,
+            SampleList(batch),
             batch_idx,
             outputs[0][0]["extra"],
             pl_module,
