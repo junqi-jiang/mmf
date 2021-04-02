@@ -4,6 +4,7 @@ import argparse
 import logging
 import typing
 
+from mmf.utils.configuration import _merge_with_dotlist
 from mmf.utils.flags import flags
 from mmf.utils.inference import Inference
 from mmf.utils.logger import setup_logger
@@ -11,16 +12,8 @@ from omegaconf import OmegaConf
 
 
 def construct_config(opts: typing.List[str]):
-    config = OmegaConf.create()
-    opt_values = [opt.split("=", maxsplit=1) for opt in opts]
-    if not all(len(opt) == 2 for opt in opt_values):
-        for opt in opt_values:
-            assert len(opt) == 2, f"{opt} has no value"
-
-    for opt, value in opt_values:
-        config[opt] = value
-
-    return config
+    config = OmegaConf.create({"checkpoint_path": ""})
+    return _merge_with_dotlist(config, opts)
 
 
 def interactive(opts: typing.Optional[typing.List[str]] = None):
