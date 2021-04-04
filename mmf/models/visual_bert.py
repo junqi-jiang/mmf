@@ -29,6 +29,9 @@ from transformers.modeling_bert import (
     BertPreTrainedModel,
 )
 
+from mmf.utils.checkpoint import load_pretrained_model
+from mmf.models.interfaces.image_features import FeatureModelInterface
+
 
 class VisualBERTBase(BertPreTrainedModel):
     def __init__(
@@ -470,7 +473,10 @@ class VisualBERT(BaseModel):
         bert_input_ids = sample_list["input_ids"]
         bert_input_mask = sample_list["input_mask"]
         bert_input_type_ids = sample_list["segment_ids"]
-
+        # print("sample list: image_feature_0:", sample_list["image_feature_0"].shape)
+        # the one extracted on raw image is: 36, 2048
+        # print("sample list: info->bbox:", len(sample_list["image_info_0"]["bbox"]))
+        # print("sample list: info->num_boxes:", len(sample_list["image_info_0"]["num_boxes"]))
         if self.training_head_type == "nlvr2":
             if not torch.jit.is_scripting():
                 bert_input_ids = torch.cat([bert_input_ids, bert_input_ids])
@@ -584,3 +590,12 @@ class VisualBERT(BaseModel):
                 raise RuntimeError("Pretraining head can't be used in script mode.")
 
         return output_dict
+
+    @classmethod
+    def from_pretrained(cls, model_name, *args, **kwargs):
+        model = super().from_pretrained(model_name, *args, **kwargs)
+        config = load_pretrained_model(model_name)["full_config"]
+        OmegaConf.set_struct(config, True)
+        if model_name == "visual_bert.finetuned.hateful_memes.direct" or kwargs.get("interface"):
+            return FeatureModelInterface(model, config)
+        return model

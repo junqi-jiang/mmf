@@ -9,6 +9,10 @@ from mmf.modules.encoders import MultiModalEncoderBase
 from mmf.utils.build import build_classifier_layer
 from mmf.utils.modeling import get_bert_configured_parameters
 
+from mmf.utils.checkpoint import load_pretrained_model
+from mmf.models.interfaces.image_models import GeneralInterface
+from omegaconf import OmegaConf
+
 
 class FusionBase(MultiModalEncoderBase):
     def __init__(self, config, *args, **kwargs):
@@ -176,7 +180,7 @@ class LateFusion(BaseModel):
         text_classifier_config.params.in_dim = self.config.text_hidden_size
         self.text_classifier = build_classifier_layer(text_classifier_config)
 
-    def forward(self, sample_list):
+    def forward(self, sample_list, zero_image=False, zero_text=False):
         text = sample_list.input_ids
         mask = sample_list.input_mask
         segment = sample_list.segment_ids
@@ -186,9 +190,25 @@ class LateFusion(BaseModel):
         else:
             modal = sample_list.image
 
+        # for calculating true relative importance
         text_embedding, modal_embedding = self.base(text, modal, [mask, segment])
+        if zero_image:
+            modal_embedding = torch.zeros_like(modal_embedding)
+        if zero_text:
+            text_embedding = torch.zeros_like(text_embedding)
         text = self.text_classifier(text_embedding)
         modal = self.modal_classifier(modal_embedding)
         output = {}
         output["scores"] = (text + modal) / 2
         return output
+
+    @classmethod
+    def from_pretrained(cls, model_name, *args, **kwargs):
+        model = super().from_pretrained(model_name, *args, **kwargs)
+        config = load_pretrained_model(model_name)["full_config"]
+        OmegaConf.set_struct(config, True)
+
+        if model_name == "late_fusion.hateful_memes" or kwargs.get("interface"):
+            return GeneralInterface(model, config)
+        return model
+

@@ -13,7 +13,8 @@ from typing import Dict, Optional, Union
 import torch
 from mmf.common.registry import registry
 from mmf.models.base_model import BaseModel
-from mmf.models.interfaces.mmbt import MMBTGridHMInterface
+# from mmf.models.interfaces.mmbt import MMBTGridHMInterface
+from mmf.models.interfaces.image_models import GeneralInterface
 from mmf.modules.encoders import (
     EncoderFactory,
     ImageEncoderFactory,
@@ -76,8 +77,10 @@ class ModalEmbeddings(nn.Module):
         end_token: Optional[Tensor] = None,
         position_ids: Optional[Tensor] = None,
         token_type_ids: Optional[Tensor] = None,
+        zero_image=False
     ):
-        token_embeddings = self.proj_embeddings(self.encoder(input_modal))
+        token_embeddings = self.proj_embeddings(self.encoder(input_modal, zero_image))
+        # print(input_modal.shape) -> 1, 3, 224, 224, image
         seq_length = token_embeddings.size(1)
 
         if start_token is not None:
@@ -154,7 +157,7 @@ class MMBTModel(nn.Module):
             mmbt = MMBTModel(config, transformer, encoder)
         """
 
-    def __init__(self, config, transformer, encoder):
+    def __init__(self, config, transformer, encoder):   # text encoder, modal encoder
         super().__init__()
         self.is_decoder = config.is_decoder
         self.num_hidden_layers = config.num_hidden_layers
@@ -176,6 +179,7 @@ class MMBTModel(nn.Module):
         inputs_embeds: Optional[Tensor] = None,
         encoder_hidden_states: Optional[Tensor] = None,
         encoder_attention_mask: Optional[Tensor] = None,
+        zero_image=False, zero_text=False
     ):
 
         if input_ids is not None and inputs_embeds is not None:
@@ -193,6 +197,7 @@ class MMBTModel(nn.Module):
 
         modal_embeddings = self.modal_encoder(
             input_modal,
+            zero_image=zero_image,
             start_token=modal_start_tokens,
             end_token=modal_end_tokens,
             position_ids=modal_position_ids,
@@ -212,6 +217,11 @@ class MMBTModel(nn.Module):
             token_type_ids=token_type_ids,
             inputs_embeds=inputs_embeds,
         )
+
+        # cannot go further into transformer package for word embeddings
+        # zero out text embeddings here
+        if zero_text:
+            txt_embeddings = torch.zeros_like(txt_embeddings)
 
         embedding_output = torch.cat([modal_embeddings, txt_embeddings], 1)
 
@@ -362,7 +372,7 @@ class MMBTBase(MultiModalEncoderBase):
 
         return modal_end_token
 
-    def forward(self, sample_list: Dict[str, Tensor]):
+    def forward(self, sample_list: Dict[str, Tensor], zero_image=False, zero_text=False):
 
         if self._is_direct_features_input:
             if "input_modal" in sample_list:
@@ -429,6 +439,7 @@ class MMBTBase(MultiModalEncoderBase):
             inputs_embeds=None,
             encoder_hidden_states=None,
             encoder_attention_mask=None,
+            zero_image=zero_image, zero_text=zero_text
         )
 
         return output
@@ -464,7 +475,7 @@ class MMBTForPreTraining(nn.Module):
                 self.bert.mmbt.transformer.embeddings.word_embeddings,
             )
 
-    def forward(self, sample_list):
+    def forward(self, sample_list, zero_image=False, zero_text=False):
         module_output = self.bert(sample_list)
         sequence_output, pooled_output = module_output[0], module_output[1]
         prediction_scores, seq_relationship_score = self.cls(
@@ -527,8 +538,11 @@ class MMBTForClassification(nn.Module):
             nn.Linear(self.encoder_config.hidden_size, self.config.num_labels),
         )
 
-    def forward(self, sample_list: Dict[str, Tensor]):
-        module_output = self.bert(sample_list)
+    def forward(self, sample_list: Dict[str, Tensor], zero_image=False, zero_text=False):
+        #zero_image = kwargs.get("zero_image", False)
+        #zero_text = kwargs.get("zero_text", False)
+        module_output = self.bert(sample_list,
+                                  zero_image=zero_image, zero_text=zero_text)
         pooled_output = module_output[1]
         output = {}
 
@@ -615,15 +629,16 @@ class MMBT(BaseModel):
         config = load_pretrained_model(model_name)["full_config"]
         OmegaConf.set_struct(config, True)
         if model_name == "mmbt.hateful_memes.images" or kwargs.get("interface"):
-            return MMBTGridHMInterface(model, config)
+            # return MMBTGridHMInterface(model, config)
+            return GeneralInterface(model, config)
         return model
 
     @classmethod
     def config_path(cls):
         return "configs/models/mmbt/pretrain.yaml"
 
-    def forward(self, sample_list: Dict[str, Tensor]):
-        return self.model(sample_list)
+    def forward(self, sample_list: Dict[str, Tensor], zero_image=False, zero_text=False):
+        return self.model(sample_list, zero_image, zero_text)
 
     def get_optimizer_parameters(self, config):
         return get_optimizer_parameters_for_bert(self.model, config)
