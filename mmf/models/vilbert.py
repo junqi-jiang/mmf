@@ -29,6 +29,10 @@ from transformers.modeling_bert import (
 )
 
 
+from mmf.utils.checkpoint import load_pretrained_model
+from mmf.models.interfaces.feature_models import FeatureModelInterface
+
+
 class BertSelfAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -604,6 +608,7 @@ class BertEncoder(nn.Module):
         all_attention_mask_c: List[Tuple[Tensor, Tensor]] = []
 
         batch_size, num_words, t_hidden_size = txt_embedding.size()
+        # should be num_samples * num_objects * dim
         _, num_regions, v_hidden_size = image_embedding.size()
 
         use_co_attention_mask = False
@@ -1400,6 +1405,11 @@ class ViLBERT(BaseModel):
                 image_target, dtype=torch.float, device=bert_input_ids.device
             )
 
+            # add image dim variable
+            image_dim_variable = sample_list["image_feature_0"].new_full(
+                size=(image_feature_variable.size(0), 1),
+                fill_value=image_feature_variable.size(1))
+
         return {
             "input_ids": bert_input_ids,
             "attention_mask": bert_input_mask,
@@ -1415,6 +1425,13 @@ class ViLBERT(BaseModel):
         return get_optimizer_parameters_for_bert(self.model, config)
 
     def forward(self, sample_list):
+        # see the difference in sample list for vilbert and visual bert
+        '''
+        mmf_predict config=projects/hateful_memes/configs/vilbert/defaults.yaml model=vilbert dataset=hateful_memes run_type=test checkpoint.resume_file=/Users/JQJiang/.cache/torch/mmf/data/models/vilbert.finetuned.hateful_memes.direct/model.pth checkpoint.resume_pretrained=False
+        :param sample_list:
+        :return:
+        '''
+
         params = self.get_image_and_text_features(sample_list)
         # pretraining labels
         params["masked_lm_labels"] = getattr(sample_list, "lm_label_ids", None)
@@ -1459,8 +1476,13 @@ class ViLBERT(BaseModel):
             output_dict["losses"][loss_key + "/masked_img_loss"] = output_dict.pop(
                 "masked_img_loss"
             )
-            # if params["is_random_next"] is not None:
-            #     output_dict["losses"][loss_key + "/next_sentence_loss"]
-            #       = output_dict.pop("next_sentence_loss")
 
         return output_dict
+
+    @classmethod
+    def from_pretrained(cls, model_name, *args, **kwargs):
+        model = super().from_pretrained(model_name, *args, **kwargs)
+        config = load_pretrained_model(model_name)["full_config"]
+        OmegaConf.set_struct(config, True)
+        return FeatureModelInterface(model, config, "vilbert")
+

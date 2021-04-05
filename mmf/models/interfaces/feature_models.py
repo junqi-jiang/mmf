@@ -18,6 +18,7 @@ from mmf.utils.download import download
 from PIL import Image
 from torch import nn
 
+from tools.scripts.features.frcnn.extract_features_frcnn import FeatureExtractor
 
 ImageType = Union[Type[Image.Image], str]
 PathType = Union[Type[Path], str]
@@ -26,12 +27,14 @@ BaseModelType = Type[BaseModel]
 
 class FeatureModelInterface(nn.Module):
 
-    def __init__(self, model: BaseModelType, config: DictConfig):
+    def __init__(self, model: BaseModelType, config: DictConfig, model_name : str):
         super().__init__()
         self.model = model
         self.config = config
         self.processor_dict = None
+        self.model_name = model_name
         self.init_processors()
+        self.feature_extractor = FeatureExtractor()
 
     def forward(self, *args, **kwargs):
         return self.model(*args, **kwargs)
@@ -65,31 +68,47 @@ class FeatureModelInterface(nn.Module):
                 image = tv_helpers.default_loader(image)
 
         text = self.processor_dict["text_processor"]({"text": text})
-        # image = self.processor_dict["image_processor"](image)
-        im_feature_0 = np.load(
-            "/Users/JQJiang/Desktop/explainable-multimodal-classification/multimodal/hateful-memes/LIME/extract-feature/feat/gun.npy",
-            allow_pickle=True)
-        im_feature_0 = torch.from_numpy(im_feature_0)
 
         sample = Sample()
         sample.text = text["text"]
         if "input_ids" in text:
             sample.update(text)
 
-        # load image_info:
-        im_info_0 = np.load(
-            "/Users/JQJiang/Desktop/explainable-multimodal-classification/multimodal/hateful-memes/LIME/extract-feature/feat/gun_info.npy",
-            allow_pickle=True)
+        # extract feature
+        _, _, im_feature_0, im_info_0 = self.feature_extractor.extract_features(image_dir=image, save_single=False)
+
+        # re-format the sample list
         sample_im_info = Sample()
-        sample_im_info.bbox = im_info_0[()]['bbox']
-        sample_im_info.num_boxes = im_info_0[()]['num_boxes']
-        sample_im_info.image_width = im_info_0[()]['image_width']
-        sample_im_info.image_height = im_info_0[()]['image_height']
+
+        # process the bounding boxes for vilbert
+        if self.model_name == "vilbert":
+            bbox = np.array(im_info_0['bbox'])
+            image_w = im_info_0['image_width']
+            image_h = im_info_0['image_height']
+            new_bbox = np.zeros((bbox.shape[0], 5), dtype=bbox.dtype)
+
+            new_bbox[:, 0] = bbox[:, 0] / image_w
+            new_bbox[:, 1] = bbox[:, 1] / image_h
+            new_bbox[:, 2] = (bbox[:, 2]) / image_w
+            new_bbox[:, 3] = (bbox[:, 3]) / image_h
+            new_bbox[:, 4] = (bbox[:, 2] - bbox[:, 0]) * (bbox[:, 3] - bbox[:, 1]) / (image_w * image_h)
+
+            sample_im_info.bbox = torch.from_numpy(new_bbox)
+        else:
+            sample_im_info.bbox = torch.from_numpy(np.array(im_info_0['bbox']))
+
+        sample_im_info.num_boxes = torch.from_numpy(np.array(im_info_0['num_boxes']))
+        sample_im_info.objects = torch.from_numpy(np.array(im_info_0['objects']))
+        sample_im_info.image_width = torch.from_numpy(np.array(im_info_0['image_width']))
+        sample_im_info.image_height = torch.from_numpy(np.array(im_info_0['image_height']))
+        sample_im_info.cls_prob = torch.from_numpy(np.array(im_info_0['cls_prob']))
         sample_list_info = SampleList([sample_im_info])
 
         sample.image_feature_0 = im_feature_0
-        sample.image_info_0 = sample_list_info
+        sample.dataset_name = "hateful_memes"
+
         sample_list = SampleList([sample])
+        sample_list.image_info_0 = sample_list_info
         device = next(self.model.parameters()).device
         sample_list = sample_list.to(device)
 
