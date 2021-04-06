@@ -15,9 +15,7 @@ The modified files are:
 - mmf/models/visual_bert.py
 - mmf/utils/checkpoint.py
 - mmf/modules/encoders.py
-- tools/scripts/features/frcnn/
-- tools/scripts/features/frcnn/
-- tools/scripts/features/frcnn/
+
 - tools/scripts/features/frcnn/extract_features_frcnn.py (https://github.com/hivestrung/mmf/commit/6332a9803721a9a230913b6e2589fed172ae4778)
 - tools/scripts/features/frcnn/frcnn_utils.py
 - tools/scripts/features/frcnn/modeling_frcnn.py
