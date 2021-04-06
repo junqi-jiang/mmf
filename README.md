@@ -1,3 +1,40 @@
+# Modified in this repo: interfaces for pretrained mmbt, late_fusion, vilbert, visual_bert.
+
+The MMF library provides an initial code base to develop multimodal machine learning methods, but it was difficult to just get those models to work without using CLI as little information was given in their docs. 
+
+Inspired by mmf/models/interfaces/mmbt.py, this repo provides interfaces that supports using pretrained models to do inference on raw images and texts for the hateful memes challenge.
+
+The supported pretrained models are: mmbt, late_fusion, vilbert, visual_bert.
+
+The modified files are:
+
+- mmf/datasets/processors/frcnn_processor.py
+- mmf/models/fusions.py
+- mmf/models/mmbt.py
+- mmf/models/vilbert.py
+- mmf/models/visual_bert.py
+- mmf/utils/checkpoint.py
+- mmf/modules/encoders.py
+- tools/scripts/features/frcnn/
+- tools/scripts/features/frcnn/
+- tools/scripts/features/frcnn/
+- tools/scripts/features/frcnn/extract_features_frcnn.py (https://github.com/hivestrung/mmf/commit/6332a9803721a9a230913b6e2589fed172ae4778)
+- tools/scripts/features/frcnn/frcnn_utils.py
+- tools/scripts/features/frcnn/modeling_frcnn.py
+- tools/scripts/features/frcnn/processing_image.py
+
+Replace these files in the mmf code base, and modify tools/scripts/features/frcnn/extract_features_frcnn.py line 28, 29, set the paths to the [feature extractor checkpoints](https://drive.google.com/drive/folders/1Kj6U-YeHrcuuWjbxtYGSttxvoDZVHxyA?usp=sharing). Then you can run inference using pretrained downloadable checkpoints with:
+
+```
+from mmf.models.visual_bert import VisualBERT
+
+visual_bert_model = VisualBERT.from_pretrained("visual_bert.finetuned.hateful_memes.direct")
+output = visual_bert_model.classify(img, text)  # image should be a PIL Image object, text is a string
+```
+
+After downloading the pretrained checkpoints, permission error might occur. To solve this, cd to that checkpoint location, find the config file comes with it, change the cache_dir, data_dir, save_dir etc. to your own paths. 
+
+---
 
 <div align="center">
 <img src="https://mmf.sh/img/logo.svg" width="50%"/>
