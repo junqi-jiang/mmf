@@ -592,6 +592,7 @@ class VisualBERT(BaseModel):
     @classmethod
     def from_pretrained(cls, model_name, *args, **kwargs):
         model = super().from_pretrained(model_name, *args, **kwargs)
+        print("debug")
         config = load_pretrained_model(model_name)["full_config"]
         OmegaConf.set_struct(config, True)
         return FeatureModelInterface(model, config, "visual_bert")

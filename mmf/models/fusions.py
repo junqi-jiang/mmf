@@ -207,8 +207,5 @@ class LateFusion(BaseModel):
         model = super().from_pretrained(model_name, *args, **kwargs)
         config = load_pretrained_model(model_name)["full_config"]
         OmegaConf.set_struct(config, True)
-
-        if model_name == "late_fusion.hateful_memes" or kwargs.get("interface"):
-            return GeneralInterface(model, config)
-        return model
+        return GeneralInterface(model, config)
 

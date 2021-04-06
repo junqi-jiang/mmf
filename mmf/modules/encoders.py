@@ -6,12 +6,11 @@ from collections import OrderedDict
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, Dict
 
 import torch
 import torchvision
 from mmf.common.registry import registry
-from mmf.models.frcnn import GeneralizedRCNN
 from mmf.modules.embeddings import ProjectionEmbedding, TextEmbedding
 from mmf.modules.hf_layers import BertModelJit
 from mmf.modules.layers import Identity
@@ -20,7 +19,7 @@ from mmf.utils.download import download_pretrained_model
 from mmf.utils.file_io import PathManager
 from mmf.utils.general import get_absolute_path
 from omegaconf import MISSING, OmegaConf
-from torch import Tensor, nn
+from torch import nn
 from transformers.configuration_auto import AutoConfig
 from transformers.modeling_auto import AutoModel
 
@@ -171,8 +170,7 @@ class IdentityEncoder(Encoder):
     @dataclass
     class Config(Encoder.Config):
         name: str = "identity"
-        # Random in_dim if not specified
-        in_dim: int = 100
+        in_dim: int = MISSING
 
     def __init__(self, config: Config):
         super().__init__()
@@ -215,8 +213,6 @@ class ImageEncoderFactory(EncoderFactory):
             self.module = TorchvisionResNetImageEncoder(params)
         elif self._type == "detectron2_resnet":
             self.module = Detectron2ResnetImageEncoder(params)
-        elif self._type == "frcnn":
-            self.module = FRCNNImageEncoder(params)
         else:
             raise NotImplementedError("Unknown Image Encoder: %s" % self._type)
 
@@ -266,11 +262,14 @@ class ResNet152ImageEncoder(Encoder):
 
         self.out_dim = 2048
 
-    def forward(self, x):
+    def forward(self, x, zero_image=False):
         # Bx3x224x224 -> Bx2048x7x7 -> Bx2048xN -> BxNx2048
         out = self.pool(self.model(x))
         out = torch.flatten(out, start_dim=2)
         out = out.transpose(1, 2).contiguous()
+        if zero_image:
+            return torch.zeros_like(out)
+
         return out  # BxNx2048
 
 
@@ -281,7 +280,6 @@ class TorchvisionResNetImageEncoder(Encoder):
         name: str = "resnet50"
         pretrained: bool = False
         zero_init_residual: bool = True
-        use_avgpool: bool = True
 
     def __init__(self, config: Config, *args, **kwargs):
         super().__init__()
@@ -291,8 +289,7 @@ class TorchvisionResNetImageEncoder(Encoder):
             pretrained=config.pretrained, zero_init_residual=config.zero_init_residual
         )
         # Set avgpool and fc layers in torchvision to Identity.
-        if not config.get("use_avgpool", False):
-            model.avgpool = Identity()
+        model.avgpool = Identity()
         model.fc = Identity()
 
         self.model = model
@@ -339,45 +336,6 @@ class Detectron2ResnetImageEncoder(Encoder):
     def forward(self, x):
         x = self.resnet(x)
         return x["res5"]
-
-
-@registry.register_encoder("frcnn")
-class FRCNNImageEncoder(Encoder):
-    @dataclass
-    class Config(Encoder.Config):
-        name: str = "frcnn"
-        pretrained: bool = True
-        pretrained_path: str = None
-
-    def __init__(self, config: Config, *args, **kwargs):
-        super().__init__()
-        self.config = config
-        pretrained = config.get("pretrained", False)
-        pretrained_path = config.get("pretrained_path", None)
-        self.frcnn = GeneralizedRCNN(config)
-        if pretrained:
-            state_dict = torch.load(pretrained_path)
-            self.frcnn.load_state_dict(state_dict)
-            self.frcnn.eval()
-
-    def forward(
-        self,
-        x: torch.Tensor,
-        sizes: torch.Tensor = None,
-        scales_yx: torch.Tensor = None,
-        padding: torch.Tensor = None,
-        max_detections: int = 0,
-        return_tensors: str = "pt",
-    ):
-        x = self.frcnn(
-            x,
-            sizes,
-            scales_yx=scales_yx,
-            padding=padding,
-            max_detections=max_detections,
-            return_tensors=return_tensors,
-        )
-        return x
 
 
 class TextEncoderTypes(Enum):
@@ -501,13 +459,15 @@ class TransformerEncoder(Encoder):
 
     def _build_encoder_config(self, config: Config):
         return AutoConfig.from_pretrained(
-            config.bert_model_name, **OmegaConf.to_container(config)
+            self.config.bert_model_name, **OmegaConf.to_container(self.config)
         )
 
-    def forward(self, *args, return_sequence=False, **kwargs) -> Tensor:
+    def forward(self, *args, **kwargs):
         # Only return pooled output
-        output = self.module(*args, **kwargs)
-        return output[0] if return_sequence else output[1]
+        res = self.module(*args, **kwargs)[1]
+        # print("this is encoders.py:466, output by text transformer encoder", type(res), res)
+        # -> ans: self.transformer.embeddings( )
+        return res
 
 
 class MultiModalEncoderBase(Encoder):

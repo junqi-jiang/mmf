@@ -601,10 +601,10 @@ class MMBT(BaseModel):
         super().__init__(config)
 
     def build(self):
-        if self.config.training_head_type == "pretraining":
+        '''if self.config.training_head_type == "pretraining":
             self.model = MMBTForPreTraining(self.config)
-        else:
-            self.model = MMBTForClassification(self.config)
+        else:'''
+        self.model = MMBTForClassification(self.config)
 
         if self.config.freeze_complete_base or self.config.freeze_text:
             for p in self.model.bert.mmbt.transformer.parameters():
@@ -628,10 +628,7 @@ class MMBT(BaseModel):
         model = super().from_pretrained(model_name, *args, **kwargs)
         config = load_pretrained_model(model_name)["full_config"]
         OmegaConf.set_struct(config, True)
-        if model_name == "mmbt.hateful_memes.images" or kwargs.get("interface"):
-            # return MMBTGridHMInterface(model, config)
-            return GeneralInterface(model, config)
-        return model
+        return GeneralInterface(model, config)
 
     @classmethod
     def config_path(cls):

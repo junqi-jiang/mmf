@@ -70,7 +70,7 @@ class Preprocess:
                     images.insert(
                         i,
                         torch.as_tensor(
-                            img_tensorize(images.pop(i), input_format=self.input_format)
+                            img_tensorize(images.pop(i))
                         )
                         .to(self.device)
                         .float(),

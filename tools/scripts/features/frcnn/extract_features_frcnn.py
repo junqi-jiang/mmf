@@ -1,11 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 
-"""
-  Run with for example:
-  python3 mmf/tools/scripts/features/frcnn/extract_features_frcnn.py \
-  --model_file model.bin --config_file config.yaml --image_dir \
-  ./example_images --output_folder ./output_features
-"""
 
 import argparse
 import copy
@@ -20,14 +14,22 @@ from tools.scripts.features.frcnn.frcnn_utils import Config
 from tools.scripts.features.frcnn.modeling_frcnn import GeneralizedRCNN
 from tools.scripts.features.frcnn.processing_image import Preprocess
 
+from PIL import Image
+
 
 class FeatureExtractor:
 
     MODEL_URL = {"LXMERT": "unc-nlp/frcnn-vg-finetuned"}
 
     def __init__(self):
-        self.args = self.get_parser().parse_args()
+
+        # manually set the config file and model file
+        self.args = self.get_parser().parse_args(
+            ["--config_file", "/Users/JQJiang/Desktop/config.yaml",
+             "--model_file", "/Users/JQJiang/Desktop/model_finetuned.bin"])
+
         self.frcnn, self.frcnn_cfg = self._build_detection_model()
+
 
     def get_parser(self):
         parser = argparse.ArgumentParser()
@@ -114,20 +116,9 @@ class FeatureExtractor:
         return parser
 
     def _build_detection_model(self):
-        if self.args.config_file:
-            frcnn_cfg = Config.from_pretrained(self.args.config_file)
-        else:
-            frcnn_cfg = Config.from_pretrained(
-                self.MODEL_URL.get(self.args.model_name, self.args.model_name)
-            )
-        if self.args.model_file:
-            frcnn = GeneralizedRCNN.from_pretrained(
+        frcnn_cfg = Config.from_pretrained(self.args.config_file)
+        frcnn = GeneralizedRCNN.from_pretrained(
                 self.args.model_file, config=frcnn_cfg
-            )
-        else:
-            frcnn = GeneralizedRCNN.from_pretrained(
-                self.MODEL_URL.get(self.args.model_name, self.args.model_name),
-                config=frcnn_cfg,
             )
 
         return frcnn, frcnn_cfg
@@ -149,6 +140,7 @@ class FeatureExtractor:
         return output_dict
 
     def _save_feature(self, file_name, full_features, feat_list, info_list):
+        file_name = "img"
         file_base_name = os.path.basename(file_name)
         file_base_name = file_base_name.split(".")[0]
         full_feature_base_name = file_base_name + "_full.npy"
@@ -258,14 +250,16 @@ class FeatureExtractor:
 
         return single_features, feat_list, info_list
 
-    def extract_features(self):
-        image_dir = self.args.image_dir
-
-        if os.path.isfile(image_dir):
+    def extract_features(self, image_dir=None, save_single=True):
+        image_dir = image_dir if image_dir else self.args.image_dir
+        if isinstance(image_dir, Image.Image) or os.path.isfile(image_dir):
             features = self.get_frcnn_features([image_dir])
-            self._save_feature(image_dir, features[0])
+            full_features, feat_list, info_list = self._process_features(features, 0)
+            if save_single:
+                self._save_feature(image_dir, full_features, feat_list, info_list)
+            else:
+                return features, full_features, feat_list, info_list
         else:
-
             files = get_image_files(
                 self.args.image_dir,
                 exclude_list=self.args.exclude_list,
@@ -310,6 +304,6 @@ class FeatureExtractor:
             print("Failed Names: " + str(failedNames))
 
 
-if __name__ == "__main__":
+'''if __name__ == "__main__":
     feature_extractor = FeatureExtractor()
-    feature_extractor.extract_features()
+    feature_extractor.extract_features(image_dir=img, save_single=False)'''
