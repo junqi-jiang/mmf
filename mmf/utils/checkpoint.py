@@ -66,7 +66,6 @@ def _load_pretrained_checkpoint(checkpoint_path, *args, **kwargs):
         model_name = list(model_config.keys())[0]
 
     model_config = model_config.get(model_name)
-    print(type(config), config)
     return {"config": model_config, "checkpoint": ckpt, "full_config": config}
 
 
@@ -118,7 +117,6 @@ def _load_pretrained_model(model_name_or_path, *args, **kwargs):
     else:
         model_config = model_config.get(model_name.split(os.path.sep)[-1].split(".")[0])
 
-    print(type(config), config)
     return {"config": model_config, "checkpoint": ckpt, "full_config": config}
 
 
