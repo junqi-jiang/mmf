@@ -1399,7 +1399,7 @@ class ViLBERT(BaseModel):
             image_label_variable = getattr(sample_list, "image_labels", None)
             image_location_variable = getattr(image_info, "bbox", None)
 
-            cls_prob = getattr(image_info, "cls_prob", None)
+            cls_prob = getattr(image_info, "cls_prob", None).cpu()
             image_target = np.array(cls_prob, dtype=np.float32)
             image_target_variable = torch.tensor(
                 image_target, dtype=torch.float, device=bert_input_ids.device
