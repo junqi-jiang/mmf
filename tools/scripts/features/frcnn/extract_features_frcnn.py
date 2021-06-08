@@ -16,6 +16,7 @@ from tools.scripts.features.frcnn.processing_image import Preprocess
 
 from PIL import Image
 
+from mmxai.utils.cache_manager.cache_loader import loadFromCache
 
 class FeatureExtractor:
 
@@ -25,8 +26,8 @@ class FeatureExtractor:
 
         # manually set the config file and model file
         self.args = self.get_parser().parse_args(
-            ["--config_file", "/Users/JQJiang/Desktop/config.yaml",
-             "--model_file", "/Users/JQJiang/Desktop/model_finetuned.bin"])
+            ["--config_file", loadFromCache("frcnn_config"),
+             "--model_file", loadFromCache("frcnn_model")])
 
         self.frcnn, self.frcnn_cfg = self._build_detection_model()
 

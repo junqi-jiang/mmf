@@ -12,6 +12,7 @@ from torchray.utils import imsc
 from tools.scripts.features.frcnn.modeling_frcnn import GeneralizedRCNN
 from tools.scripts.features.frcnn.frcnn_utils import Config
 
+from mmxai.utils.cache_manager.cache_loader import loadFromCache
 
 
 
@@ -208,9 +209,9 @@ def torchRay_feat_extract(img_tensor):
     Args = get_parser().parse_args(
         [
             "--config_file",
-            "/home/chenyu/Documents/MSc Computing/Group Project/group_project_draft/jjq_models/config.yaml",
+            loadFromCache("frcnn_config"),
             "--model_file",
-            "/home/chenyu/Documents/MSc Computing/Group Project/group_project_draft/jjq_models/model_finetuned.bin",]
+            loadFromCache("frcnn_model"),]
     )
     feature_extraction_model = GeneralizedRCNN.from_pretrained(
         Args.model_file, config=Config.from_pretrained(Args.config_file)
